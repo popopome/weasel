@@ -36,6 +36,44 @@
                  :value (pr-str e)
                  :stacktrace "No stacktrace available."}))}))
 
+(defn load-js
+  [url callback]
+  (let [script (.createElement js/document "script")]
+    (set! (.-type script) "text/javascript")
+    (-> (.-body js/document)
+        (.appendChild script))
+
+    (set! (.-onload script)
+          (fn []
+            (if callback
+              (callback))
+            ))
+
+    (set! (.-src script) url)
+    ))
+
+(defn process-eval-js-file
+  [message callback]
+  (let [fpath (:file message)]
+    (load-js fpath
+             #(callback {:op :result
+                         :value (let [weasel_tmp (aget js/window "__weasel_tmp")
+                                      weasel_err (aget js/window "__weasel_tmp_err")
+                                      ]
+                                  (if weasel_err
+                                    {:status :exception
+                                     :value (pr-str weasel_err)
+                                     :stacktrace (if (.hasOwnProperty weasel_err "stack")
+                                                   (.-stack weasel_err)
+                                                   "No stacktrace available.")}
+                                    {:status :success
+                                     :value (str weasel_tmp)
+                                     })
+                                  )}
+               ))
+    ))
+
+
 (defn repl-print
   [& args]
   (if-let [conn @ws-connection]
@@ -65,9 +103,15 @@
 
     (event/listen repl-connection :message
       (fn [evt]
-        (let [{:keys [op] :as message} (read-string (.-message evt))
-              response (-> message process-message pr-str)]
-          (net/transmit repl-connection response))))
+        (let [{:keys [op] :as message} (read-string (.-message evt))]
+          (if (= op :eval-js-file)
+            (process-eval-js-file message
+                                  #(let [response (pr-str %)]
+                                    (net/transmit repl-connection response)))
+            (let [response (-> message process-message pr-str)]
+              (net/transmit repl-connection response)
+              ))
+          )))
 
     (event/listen repl-connection :closed
       (fn [evt]
