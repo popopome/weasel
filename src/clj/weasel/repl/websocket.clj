@@ -41,7 +41,7 @@
 
 (defrecord WebsocketEnvViaFile []
   cljs.repl/IJavaScriptEnv
-  (-setup [this] (websocket-setup-env this))
+  (-setup [this _] (websocket-setup-env this))
   (-evaluate [_ _ _ js] (websocket-eval-via-file js))
   (-load [this ns url] (load-javascript-via-file this ns url))
   (-tear-down [_] (websocket-tear-down-env))
